@@ -2,13 +2,13 @@ extern crate ndarray;
 extern crate ndarray_linalg;
 extern crate num;
 extern crate num_traits;
-extern crate rustfft;
 
+use easyfft::prelude::*;
+use easyfft::{Complex, FftNum};
 use ndarray::{prelude::*, IxDynImpl, OwnedRepr};
 use ndarray::{Array, ArrayBase, Axis, Data, Dimension, Slice};
 use num::FromPrimitive;
 use num_traits::Zero;
-use rustfft::{num_complex::Complex, FftNum, FftPlanner};
 use std::error::Error;
 
 /// Pad the edges of an array with zeros.
@@ -96,19 +96,13 @@ where
 
     let mut in1 = in1.mapv(|x| Complex::new(x, Zero::zero()));
     let mut in2 = in2.mapv(|x| Complex::new(x, Zero::zero()));
-
-    let mut scratch = vec![Complex::new(Zero::zero(), Zero::zero()); total_size];
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(total_size);
-    fft.process_with_scratch(in1.as_slice_mut().unwrap(), scratch.as_mut_slice());
-    fft.process_with_scratch(in2.as_slice_mut().unwrap(), scratch.as_mut_slice());
+    in1.as_slice_mut().unwrap().fft_mut();
+    in2.as_slice_mut().unwrap().fft_mut();
 
     // Multiply the FFTs.
     let mut out = in1 * in2;
 
-    // Perform the inverse FFT.
-    let fft = planner.plan_fft_inverse(total_size);
-    fft.process_with_scratch(out.as_slice_mut().unwrap(), scratch.as_mut_slice());
+    out.as_slice_mut().unwrap().ifft_mut();
 
     // Return the real part of the result. Note normalise by 1/total_size
     let total_size = A::from_usize(total_size).unwrap();
@@ -153,19 +147,14 @@ where
 
     let mut in1 = in1.mapv(|x| Complex::new(x, Zero::zero()));
     let mut in2 = in2.mapv(|x| Complex::new(x, Zero::zero()));
-
-    let mut scratch = vec![Complex::new(Zero::zero(), Zero::zero()); total_size];
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(total_size);
-    fft.process_with_scratch(in1.as_slice_mut().unwrap(), scratch.as_mut_slice());
-    fft.process_with_scratch(in2.as_slice_mut().unwrap(), scratch.as_mut_slice());
+    in1.as_slice_mut().unwrap().fft_mut();
+    in2.as_slice_mut().unwrap().fft_mut();
 
     // Multiply the FFTs.
     let mut out = in1 * in2;
 
     // Perform the inverse FFT.
-    let fft = planner.plan_fft_inverse(total_size);
-    fft.process_with_scratch(out.as_slice_mut().unwrap(), scratch.as_mut_slice());
+    out.as_slice_mut().unwrap().ifft_mut();
 
     // Return the real part of the result. Note normalise by 1/total_size
     let total_size = A::from_usize(total_size).unwrap();
