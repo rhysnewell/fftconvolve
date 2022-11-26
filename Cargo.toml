@@ -10,7 +10,7 @@ repository = "https://github.com/rhysnewell/fftconvolve"
 documentation = "https://github.com/rhysnewell/fftconvolve"
 readme = "README.md"
 keywords = ["fft", "convolution", "correlation", "signal-processing"]
-categories = ["science::mathematics", "science::engineering", "science::signal-processing"]
+categories = ["mathematics", "science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
