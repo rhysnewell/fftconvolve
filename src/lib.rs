@@ -11,6 +11,12 @@ use ndarray::{Array, ArrayBase, Axis, Data, Dimension, Slice};
 use num_traits::Zero;
 use num::FromPrimitive;
 
+// Determine the size of the output of convolution
+pub enum Mode {
+    Full,
+    Same,
+    Valid,
+}
 
 /// Pad the edges of an array with zeros.
 ///
@@ -74,6 +80,7 @@ where
 pub fn fftconvolve<A, S, D>(
     in1: &ArrayBase<S, D>, 
     in2: &ArrayBase<S, D>,
+    mode: Mode,
 ) -> Result<ArrayBase<OwnedRepr<A>, Dim<IxDynImpl>>, Box<dyn Error>> 
 where
     A: FftNum + FromPrimitive,
@@ -134,6 +141,7 @@ where
 pub fn fftcorrelate<A, S, D>(
     in1: &ArrayBase<S, D>, 
     in2: &ArrayBase<S, D>,
+    mode: Mode,
 ) -> Result<ArrayBase<OwnedRepr<A>, Dim<IxDynImpl>>, Box<dyn Error>> 
 where
     A: FftNum + FromPrimitive,
@@ -194,6 +202,9 @@ where
     )
 }
 
+
+
+
 // create tests
 #[cfg(test)]
 mod tests {
@@ -245,7 +256,7 @@ mod tests {
     fn test_fftconvolve_1d() {
         let in1 = Array1::range(1.0, 4.0, 1.0);
         let in2 = Array1::range(6.0, 3.0, -1.0);
-        let out = fftconvolve(&in1, &in2).unwrap();
+        let out = fftconvolve(&in1, &in2, Mode::Full).unwrap();
         let expected = Array1::<f64>::from_vec(vec![6., 17., 32., 23., 12.]);
         out.iter().zip(expected.iter()).for_each(|(a, b)| assert_aclose!(*a, *b, 1e-6));
     }
@@ -265,7 +276,7 @@ mod tests {
                 4., 5., 6., 
                 7., 8., 9.
             ]).unwrap();
-        let output = fftconvolve(&mat, &kernel).unwrap();
+        let output = fftconvolve(&mat, &kernel, Mode::Full).unwrap();
         let expected = Array2::from_shape_vec((5, 5), 
             vec![
                 0., 0., 0., 0., 0., 
@@ -291,7 +302,7 @@ mod tests {
                 1., 2., 3., 
                 4., 5., 6.,
             ]).unwrap();
-        let output = fftconvolve(&mat, &kernel).unwrap();
+        let output = fftconvolve(&mat, &kernel, Mode::Full).unwrap();
         let expected = Array2::from_shape_vec((4, 5), 
             vec![
                 0., 0., 0., 0., 0., 
@@ -316,7 +327,7 @@ mod tests {
                 4., 5., 6., 
                 7., 8., 9.
             ]).unwrap();
-        let output = fftcorrelate(&mat, &kernel).unwrap();
+        let output = fftcorrelate(&mat, &kernel, Mode::Full).unwrap();
         let expected = Array2::from_shape_vec((5, 5), 
             vec![
                 0., 0., 0., 0., 0., 
@@ -335,28 +346,48 @@ mod tests {
         // 3-dimensional array of shape (2, 2, 2) values ranges from 0 to 7
         let kernel = Array3::from_shape_vec((2, 2, 2), 
             vec![
-                0., 1., 2., 3., 4., 5., 6., 7.
+                0., 1., 
+                2., 3., 
+                
+                4., 5., 
+                6., 7.
             ]).unwrap();
         
-        let output_correlate = fftcorrelate(&mat, &kernel).unwrap();
-        let output_convolve = fftconvolve(&mat, &kernel).unwrap();
+        let output_correlate = fftcorrelate(&mat, &kernel, Mode::Full).unwrap();
+        let output_convolve = fftconvolve(&mat, &kernel, Mode::Full).unwrap();
         let expected_correlate = Array3::from_shape_vec(
             (3, 3, 3),
             vec!(
-                7., 13.,  6., 12., 22., 10.,  5.,  9.,  4., 
-                10., 18., 8., 16., 28., 12.,  6., 10.,  4.,
-                3., 5., 2., 4., 6., 2., 1., 1., 0.,
+                7., 13.,  6., 
+                12., 22., 10.,  
+                5.,  9.,  4.,
+
+                10., 18., 8., 
+                16., 28., 12., 
+                6., 10.,  4.,
+
+                3., 5., 2., 
+                4., 6., 2., 
+                1., 1., 0.,
                 )
         ).unwrap();
         let expected_convolve = Array3::from_shape_vec(
             (3, 3, 3),
             vec!(
-                0., 1., 1., 2., 6., 4., 2., 5., 3.,
-                4., 10., 6., 12., 28., 16., 8., 18., 10.,
-                4., 9., 5., 10., 22., 12., 6., 13., 7.,
+                0., 1., 1., 
+                2., 6., 4., 
+                2., 5., 3.,
+                
+                4., 10., 6., 
+                12., 28., 16., 
+                8., 18., 10.,
+                
+                4., 9., 5., 
+                10., 22., 12., 
+                6., 13., 7.,
                 )
         ).unwrap();
-        
+
         output_convolve.iter().zip(expected_convolve.iter()).for_each(|(a, b)| assert_aclose!(*a, *b, 1e-5));
         output_correlate.iter().zip(expected_correlate.iter()).for_each(|(a, b)| assert_aclose!(*a, *b, 1e-5));
     }
