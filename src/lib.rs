@@ -1,14 +1,10 @@
-extern crate ndarray;
-extern crate ndarray_linalg;
-extern crate num;
-extern crate num_traits;
-
 use easyfft::prelude::*;
 use easyfft::{Complex, FftNum};
-use ndarray::{prelude::*, IxDynImpl, OwnedRepr};
+use ndarray::{prelude::*, OwnedRepr, DataMut};
 use ndarray::{Array, ArrayBase, Axis, Data, Dimension, Slice};
 use num::FromPrimitive;
-<<<<<<< HEAD
+use num_traits::Zero;
+use std::error::Error;
 
 // Determine the size of the output of convolution
 pub enum Mode {
@@ -16,10 +12,6 @@ pub enum Mode {
     Same,
     Valid,
 }
-=======
-use num_traits::Zero;
-use std::error::Error;
->>>>>>> cde88b37abe23862a04f84dfae49a6e17e5d7de6
 
 /// Pad the edges of an array with zeros.
 ///
@@ -82,12 +74,8 @@ where
 pub fn fftconvolve<A, S, D>(
     in1: &ArrayBase<S, D>,
     in2: &ArrayBase<S, D>,
-<<<<<<< HEAD
     mode: Mode,
-) -> Result<ArrayBase<OwnedRepr<A>, Dim<IxDynImpl>>, Box<dyn Error>> 
-=======
-) -> Result<ArrayBase<OwnedRepr<A>, Dim<IxDynImpl>>, Box<dyn Error>>
->>>>>>> cde88b37abe23862a04f84dfae49a6e17e5d7de6
+) -> Result<ArrayBase<OwnedRepr<A>, D>, Box<dyn Error>> 
 where
     A: FftNum + FromPrimitive,
     S: Data<Elem = A>,
@@ -100,6 +88,8 @@ where
 
     // Pad the arrays to the next power of 2.
     let mut shape = in1.shape().to_vec();
+    let s1 = Array::from_vec(in1.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
+    let s2 = Array::from_vec(in2.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
     for (s, s_other) in shape.iter_mut().zip(in2.shape().iter()) {
         *s = *s + *s_other - 1;
     }
@@ -121,11 +111,23 @@ where
 
     // Return the real part of the result. Note normalise by 1/total_size
     let total_size = A::from_usize(total_size).unwrap();
-    // convert shape to a tuple of length shape.len()
-    Ok(Array::from_shape_vec(
-        shape,
-        out.into_iter().map(|c| c.re / total_size).collect(),
-    )?)
+
+    match mode {
+        Mode::Full => {
+            let out = out.mapv(|x| x.re / total_size);
+            Ok(out)
+        }
+        Mode::Same => {
+            let mut out = out.mapv(|x| x.re / total_size);
+            centred(&mut out, s1);
+            Ok(out)
+        }
+        Mode::Valid => {
+            let mut out = out.mapv(|x| x.re / total_size);
+            centred(&mut out, s1 - s2 + 1);
+            Ok(out)
+        }
+    }
 }
 
 /// Cross-correlate two N-dimensional arrays using FFT.
@@ -133,12 +135,8 @@ where
 pub fn fftcorrelate<A, S, D>(
     in1: &ArrayBase<S, D>,
     in2: &ArrayBase<S, D>,
-<<<<<<< HEAD
     mode: Mode,
-) -> Result<ArrayBase<OwnedRepr<A>, Dim<IxDynImpl>>, Box<dyn Error>> 
-=======
-) -> Result<ArrayBase<OwnedRepr<A>, Dim<IxDynImpl>>, Box<dyn Error>>
->>>>>>> cde88b37abe23862a04f84dfae49a6e17e5d7de6
+) -> Result<ArrayBase<OwnedRepr<A>, D>, Box<dyn Error>> 
 where
     A: FftNum + FromPrimitive,
     S: Data<Elem = A>,
@@ -149,13 +147,12 @@ where
         return Err("Input arrays must have the same number of dimensions.".into());
     }
     // reverse the second array
-    let shape = in2.shape().to_vec();
-    let mut in2 = in2.to_owned().into_iter().collect::<Vec<_>>();
-    in2.reverse();
-    // collect into an array of original shape and get complex conjugate
-    let in2 = Array::from_shape_vec(shape, in2)?;
+    let mut in2 = in2.to_owned();
+    in2.slice_each_axis_inplace(|_| Slice::new(0, None, -1));
 
     let mut shape = in1.shape().to_vec();
+    let s1 = Array::from_vec(in1.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
+    let s2 = Array::from_vec(in2.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
     for (s, s_other) in shape.iter_mut().zip(in2.shape().iter()) {
         *s = *s + *s_other - 1;
     }
@@ -179,13 +176,38 @@ where
     // Return the real part of the result. Note normalise by 1/total_size
     let total_size = A::from_usize(total_size).unwrap();
     // convert shape to a tuple of length shape.len()
-    Ok(Array::from_shape_vec(
-        shape,
-        out.into_iter().map(|c| c.re / total_size).collect(),
-    )?)
+    match mode {
+        Mode::Full => {
+            let out = out.mapv(|x| x.re / total_size);
+            Ok(out)
+        }
+        Mode::Same => {
+            let mut out = out.mapv(|x| x.re / total_size);
+            centred(&mut out, s1);
+            Ok(out)
+        }
+        Mode::Valid => {
+            let mut out = out.mapv(|x| x.re / total_size);
+            centred(&mut out, s1 - s2 + 1);
+            Ok(out)
+        }
+    }
 }
 
-
+fn centred<S, D>(arr: &mut ArrayBase<S, D>, s1: Array1<isize>)
+where
+    S: DataMut,
+    D: Dimension,
+{
+    let out_shape = Array::from_vec(arr.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
+    let startind = (out_shape.to_owned() - s1.to_owned()) / 2;
+    let endind = startind.clone() + s1;
+    println!("{:?}", startind);
+    println!("{:?}", endind);
+    (0..endind.len()).into_iter().for_each(|axis| {
+        arr.slice_axis_inplace(Axis(axis), Slice::new(startind[axis] as isize, Some(endind[axis] as isize), 1));
+    });
+}
 
 
 // create tests
@@ -196,13 +218,14 @@ mod tests {
 
     #[test]
     fn reverse_array() {
-        let standard = Array2::from_shape_vec((3, 3), vec![1, 2, 3, 4, 5, 6, 7, 8, 9]).unwrap();
-        let mut standard = standard.into_iter().collect::<Vec<_>>();
-        standard.reverse();
+        let mut standard = Array2::from_shape_vec((3, 3), vec![1, 2, 3, 4, 5, 6, 7, 8, 9]).unwrap();
+        // let mut standard = standard.into_iter().collect::<Vec<_>>();
+        // standard.reverse();
+        standard.slice_each_axis_inplace(|_| Slice::new(0, None, -1));
         // reverse axes
-        let reversed = Array2::from_shape_vec((3, 3), standard).unwrap();
+        // let reversed = Array2::from_shape_vec((3, 3), standard).unwrap();
         let expected = Array2::from_shape_vec((3, 3), vec![9, 8, 7, 6, 5, 4, 3, 2, 1]).unwrap();
-        assert_eq!(reversed, expected);
+        assert_eq!(standard, expected);
     }
 
     #[test]
@@ -212,10 +235,13 @@ mod tests {
         let expected = Array2::<f32>::from_shape_vec(
             (7, 10),
             vec![
-                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 1., 1., 1., 1., 0., 0., 0., 0., 0.,
-                0., 1., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 0., 0., 0., 0., 0.,
+                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 
+                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 
+                0., 0., 0., 1., 1., 1., 1., 0., 0., 0., 
+                0., 0., 0., 1., 1., 1., 1., 0., 0., 0., 
+                0., 0., 0., 1., 1., 1., 1., 0., 0., 0., 
+                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 
+                0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
             ],
         )
         .unwrap();
@@ -236,8 +262,6 @@ mod tests {
 
     #[test]
     fn test_fftconvolve_2d_1() {
-<<<<<<< HEAD
-
         let mat = Array2::from_shape_vec((3, 3), 
             vec![
                 0.0, 0.0, 0.0,
@@ -252,18 +276,12 @@ mod tests {
             ]).unwrap();
         let output = fftconvolve(&mat, &kernel, Mode::Full).unwrap();
         let expected = Array2::from_shape_vec((5, 5), 
-=======
-        let mat = Array2::from_shape_vec((3, 3), vec![0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0])
-            .unwrap();
-        let kernel =
-            Array2::from_shape_vec((3, 3), vec![1., 2., 3., 4., 5., 6., 7., 8., 9.]).unwrap();
-        let output = fftconvolve(&mat, &kernel).unwrap();
-        let expected = Array2::from_shape_vec(
-            (5, 5),
->>>>>>> cde88b37abe23862a04f84dfae49a6e17e5d7de6
             vec![
-                0., 0., 0., 0., 0., 0., 1., 2., 3., 0., 0., 4., 5., 6., 0., 0., 7., 8., 9., 0., 0.,
-                0., 0., 0., 0.,
+                0., 0., 0., 0., 0., 
+                0., 1., 2., 3., 0., 
+                0., 4., 5., 6., 0., 
+                0., 7., 8., 9., 0., 
+                0., 0., 0., 0., 0.,
             ],
         )
         .unwrap();
@@ -275,8 +293,6 @@ mod tests {
 
     #[test]
     fn test_fftconvolve_2d_2() {
-<<<<<<< HEAD
-
         let mat = Array2::from_shape_vec((3, 3), 
             vec![
                 0.0, 0.0, 0.0,
@@ -290,16 +306,11 @@ mod tests {
             ]).unwrap();
         let output = fftconvolve(&mat, &kernel, Mode::Full).unwrap();
         let expected = Array2::from_shape_vec((4, 5), 
-=======
-        let mat = Array2::from_shape_vec((3, 3), vec![0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0])
-            .unwrap();
-        let kernel = Array2::from_shape_vec((2, 3), vec![1., 2., 3., 4., 5., 6.]).unwrap();
-        let output = fftconvolve(&mat, &kernel).unwrap();
-        let expected = Array2::from_shape_vec(
-            (4, 5),
->>>>>>> cde88b37abe23862a04f84dfae49a6e17e5d7de6
             vec![
-                0., 0., 0., 0., 0., 0., 1., 2., 3., 0., 0., 4., 5., 6., 0., 0., 0., 0., 0., 0.,
+                0., 0., 0., 0., 0., 
+                0., 1., 2., 3., 0., 
+                0., 4., 5., 6., 0., 
+                0., 0., 0., 0., 0.,
             ],
         )
         .unwrap();
@@ -311,7 +322,6 @@ mod tests {
 
     #[test]
     fn test_fftcorrelate_2d_1() {
-<<<<<<< HEAD
         let mat = Array2::from_shape_vec((3, 3), 
         vec![
             0.0, 0.0, 0.0,
@@ -326,18 +336,68 @@ mod tests {
             ]).unwrap();
         let output = fftcorrelate(&mat, &kernel, Mode::Full).unwrap();
         let expected = Array2::from_shape_vec((5, 5), 
-=======
-        let mat = Array2::from_shape_vec((3, 3), vec![0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0])
-            .unwrap();
-        let kernel =
-            Array2::from_shape_vec((3, 3), vec![1., 2., 3., 4., 5., 6., 7., 8., 9.]).unwrap();
-        let output = fftcorrelate(&mat, &kernel).unwrap();
-        let expected = Array2::from_shape_vec(
-            (5, 5),
->>>>>>> cde88b37abe23862a04f84dfae49a6e17e5d7de6
             vec![
-                0., 0., 0., 0., 0., 0., 9., 8., 7., 0., 0., 6., 5., 4., 0., 0., 3., 2., 1., 0., 0.,
-                0., 0., 0., 0.,
+                0., 0., 0., 0., 0., 
+                0., 9., 8., 7., 0., 
+                0., 6., 5., 4., 0., 
+                0., 3., 2., 1., 0., 
+                0., 0., 0., 0., 0.,
+            ],
+        )
+        .unwrap();
+        output
+            .iter()
+            .zip(expected.iter())
+            .for_each(|(a, b)| assert_aclose!(*a, *b, 1e-6));
+    }
+
+    #[test]
+    fn test_fftcorrelate_2d_same() {
+        let mat = Array2::from_shape_vec((3, 3), 
+        vec![
+            0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0,
+        ]).unwrap();
+        let kernel = Array2::from_shape_vec((3, 3), 
+            vec![
+                1., 2., 3., 
+                4., 5., 6., 
+                7., 8., 9.
+            ]).unwrap();
+        let output = fftcorrelate(&mat, &kernel, Mode::Same).unwrap();
+        let expected = Array2::from_shape_vec((3, 3), 
+            vec![
+                9., 8., 7.,
+                6., 5., 4.,
+                3., 2., 1.,
+            ],
+        )
+        .unwrap();
+        output
+            .iter()
+            .zip(expected.iter())
+            .for_each(|(a, b)| assert_aclose!(*a, *b, 1e-6));
+    }
+
+    #[test]
+    fn test_fftcorrelate_2d_valid() {
+        let mat = Array2::from_shape_vec((3, 3), 
+        vec![
+            0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0,
+        ]).unwrap();
+        let kernel = Array2::from_shape_vec((3, 3), 
+            vec![
+                1., 2., 3., 
+                4., 5., 6., 
+                7., 8., 9.
+            ]).unwrap();
+        let output = fftcorrelate(&mat, &kernel, Mode::Valid).unwrap();
+        let expected = Array2::from_shape_vec((1, 1), 
+            vec![
+                5.,
             ],
         )
         .unwrap();
@@ -352,7 +412,6 @@ mod tests {
         // 3-dimensional array of shape (2, 2, 2) filled with ones
         let mat = Array3::<f32>::ones((2, 2, 2));
         // 3-dimensional array of shape (2, 2, 2) values ranges from 0 to 7
-<<<<<<< HEAD
         let kernel = Array3::from_shape_vec((2, 2, 2), 
             vec![
                 0., 1., 
@@ -399,37 +458,5 @@ mod tests {
 
         output_convolve.iter().zip(expected_convolve.iter()).for_each(|(a, b)| assert_aclose!(*a, *b, 1e-5));
         output_correlate.iter().zip(expected_correlate.iter()).for_each(|(a, b)| assert_aclose!(*a, *b, 1e-5));
-=======
-        let kernel =
-            Array3::from_shape_vec((2, 2, 2), vec![0., 1., 2., 3., 4., 5., 6., 7.]).unwrap();
-
-        let output_correlate = fftcorrelate(&mat, &kernel).unwrap();
-        let output_convolve = fftconvolve(&mat, &kernel).unwrap();
-        let expected_correlate = Array3::from_shape_vec(
-            (3, 3, 3),
-            vec![
-                7., 13., 6., 12., 22., 10., 5., 9., 4., 10., 18., 8., 16., 28., 12., 6., 10., 4.,
-                3., 5., 2., 4., 6., 2., 1., 1., 0.,
-            ],
-        )
-        .unwrap();
-        let expected_convolve = Array3::from_shape_vec(
-            (3, 3, 3),
-            vec![
-                0., 1., 1., 2., 6., 4., 2., 5., 3., 4., 10., 6., 12., 28., 16., 8., 18., 10., 4.,
-                9., 5., 10., 22., 12., 6., 13., 7.,
-            ],
-        )
-        .unwrap();
-
-        output_convolve
-            .iter()
-            .zip(expected_convolve.iter())
-            .for_each(|(a, b)| assert_aclose!(*a, *b, 1e-5));
-        output_correlate
-            .iter()
-            .zip(expected_correlate.iter())
-            .for_each(|(a, b)| assert_aclose!(*a, *b, 1e-5));
->>>>>>> cde88b37abe23862a04f84dfae49a6e17e5d7de6
     }
 }
