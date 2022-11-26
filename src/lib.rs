@@ -202,8 +202,6 @@ where
     let out_shape = Array::from_vec(arr.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
     let startind = (out_shape.to_owned() - s1.to_owned()) / 2;
     let endind = startind.clone() + s1;
-    println!("{:?}", startind);
-    println!("{:?}", endind);
     (0..endind.len()).into_iter().for_each(|axis| {
         arr.slice_axis_inplace(Axis(axis), Slice::new(startind[axis] as isize, Some(endind[axis] as isize), 1));
     });
