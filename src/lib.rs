@@ -64,7 +64,7 @@ where
     D: Dimension,
 {
     arr.shape()
-        .into_iter()
+        .iter()
         .zip(shape.iter())
         .map(|(arr_size, new_size)| [0, new_size - arr_size])
         .collect()
@@ -88,16 +88,16 @@ where
 
     // Pad the arrays to the next power of 2.
     let mut shape = in1.shape().to_vec();
-    let s1 = Array::from_vec(in1.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
-    let s2 = Array::from_vec(in2.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
+    let s1 = Array::from_vec(in1.shape().iter().map(|a| *a as isize).collect::<Vec<_>>());
+    let s2 = Array::from_vec(in2.shape().iter().map(|a| *a as isize).collect::<Vec<_>>());
     for (s, s_other) in shape.iter_mut().zip(in2.shape().iter()) {
         *s = *s + *s_other - 1;
     }
-    let in1 = pad_with_zeros(in1, generate_pad_vector(&in1, shape.as_slice()))?;
-    let in2 = pad_with_zeros(in2, generate_pad_vector(&in2, shape.as_slice()))?;
+    let in1 = pad_with_zeros(in1, generate_pad_vector(in1, shape.as_slice()))?;
+    let in2 = pad_with_zeros(in2, generate_pad_vector(in2, shape.as_slice()))?;
 
     // multiple values in shape together to get total size
-    let total_size = shape.iter().fold(1, |acc, x| acc * x);
+    let total_size = shape.iter().product();
 
     let mut in1 = in1.mapv(|x| Complex::new(x, Zero::zero()));
     let mut in2 = in2.mapv(|x| Complex::new(x, Zero::zero()));
@@ -151,16 +151,16 @@ where
     in2.slice_each_axis_inplace(|_| Slice::new(0, None, -1));
 
     let mut shape = in1.shape().to_vec();
-    let s1 = Array::from_vec(in1.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
-    let s2 = Array::from_vec(in2.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
+    let s1 = Array::from_vec(in1.shape().iter().map(|a| *a as isize).collect::<Vec<_>>());
+    let s2 = Array::from_vec(in2.shape().iter().map(|a| *a as isize).collect::<Vec<_>>());
     for (s, s_other) in shape.iter_mut().zip(in2.shape().iter()) {
         *s = *s + *s_other - 1;
     }
-    let in1 = pad_with_zeros(in1, generate_pad_vector(&in1, shape.as_slice()))?;
+    let in1 = pad_with_zeros(in1, generate_pad_vector(in1, shape.as_slice()))?;
     let in2 = pad_with_zeros(&in2, generate_pad_vector(&in2, shape.as_slice()))?;
 
     // multiple values in shape together to get total size
-    let total_size = shape.iter().fold(1, |acc, x| acc * x);
+    let total_size = shape.iter().product();
 
     let mut in1 = in1.mapv(|x| Complex::new(x, Zero::zero()));
     let mut in2 = in2.mapv(|x| Complex::new(x, Zero::zero()));
@@ -199,11 +199,11 @@ where
     S: DataMut,
     D: Dimension,
 {
-    let out_shape = Array::from_vec(arr.shape().into_iter().map(|a| *a as isize).collect::<Vec<_>>());
+    let out_shape = Array::from_vec(arr.shape().iter().map(|a| *a as isize).collect::<Vec<_>>());
     let startind = (out_shape.to_owned() - s1.to_owned()) / 2;
     let endind = startind.clone() + s1;
     (0..endind.len()).into_iter().for_each(|axis| {
-        arr.slice_axis_inplace(Axis(axis), Slice::new(startind[axis] as isize, Some(endind[axis] as isize), 1));
+        arr.slice_axis_inplace(Axis(axis), Slice::new(startind[axis], Some(endind[axis]), 1));
     });
 }
 
