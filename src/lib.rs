@@ -1,5 +1,6 @@
 use easyfft::prelude::*;
-use easyfft::{Complex, FftNum};
+use easyfft::FftNum;
+use easyfft::num_complex::Complex;
 use ndarray::{prelude::*, OwnedRepr, DataMut};
 use ndarray::{Array, ArrayBase, Axis, Data, Dimension, Slice};
 use num::FromPrimitive;
@@ -77,7 +78,7 @@ pub fn fftconvolve<A, S, D>(
     mode: Mode,
 ) -> Result<ArrayBase<OwnedRepr<A>, D>, Box<dyn Error>> 
 where
-    A: FftNum + FromPrimitive,
+    A: FftNum + FromPrimitive + Default,
     S: Data<Elem = A>,
     D: Dimension,
 {
@@ -138,7 +139,7 @@ pub fn fftcorrelate<A, S, D>(
     mode: Mode,
 ) -> Result<ArrayBase<OwnedRepr<A>, D>, Box<dyn Error>> 
 where
-    A: FftNum + FromPrimitive,
+    A: FftNum + FromPrimitive + Default,
     S: Data<Elem = A>,
     D: Dimension,
 {
