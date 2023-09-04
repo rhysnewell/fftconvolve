@@ -16,7 +16,9 @@ categories = ["mathematics", "science"]
 
 [dependencies]
 ndarray = "^0.15"
-ndarray-linalg = "^0.16"
 num-traits = "^0.2"
 num = "^0.4"
 easyfft = "^0.2"
+
+[dev-dependencies]
+ndarray-linalg = "^0.16"
